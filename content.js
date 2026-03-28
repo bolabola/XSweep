@@ -360,6 +360,8 @@ function ensureStyles() {
     .xur-btn-soft:hover{color:#cfd6ff;background:rgba(70,75,120,.5)}
     .xur-btn-danger{color:#fff;background:linear-gradient(135deg,#e84393,#fd79a8);box-shadow:0 4px 14px rgba(232,67,147,.3);font-weight:700;font-size:13px;padding:10px 20px;border-radius:10px}
     .xur-btn-danger:hover{box-shadow:0 6px 20px rgba(232,67,147,.45)}
+    .xur-btn-stop{color:#fff;background:linear-gradient(135deg,#f39c12,#e67e22);box-shadow:0 4px 14px rgba(243,156,18,.3);font-weight:700;font-size:13px;padding:10px 20px;border-radius:10px}
+    .xur-btn-stop:hover{box-shadow:0 6px 20px rgba(243,156,18,.45)}
     .xur-btn-close{color:#a8b0d4;background:rgba(80,85,130,.3);border:1px solid rgba(120,128,190,.2);border-radius:8px;padding:5px 12px;font-size:11px;font-weight:600}
     .xur-btn-close:hover{color:#fff;background:rgba(80,85,130,.5)}
 
@@ -607,7 +609,9 @@ async function renderPanel() {
           <button class="xur-btn-preview ${runtimeState.previewLoading ? "xur-btn-loading" : ""}" data-preview="1" ${runtimeState.previewLoading ? "disabled" : ""}>
             ${runtimeState.previewLoading ? '<span class="xur-spinner"></span>Loading...' : '<span class="xur-btn-preview-icon">💻</span>Preview'}
           </button>
-          <button class="xur-btn xur-btn-danger xur-btn-unfollow-all" data-batch="1">Unfollow All</button>
+          ${runtimeState.running
+            ? '<button class="xur-btn xur-btn-stop xur-btn-unfollow-all" data-stop="1">Stop</button>'
+            : '<button class="xur-btn xur-btn-danger xur-btn-unfollow-all" data-batch="1">Unfollow All</button>'}
         </div>
       </div>
 
@@ -643,6 +647,12 @@ async function renderPanel() {
   ui.root.querySelector("[data-batch='1']")?.addEventListener("click", async () => {
     await applyFiltersAndRender();
     await runBatch();
+  });
+
+  ui.root.querySelector("[data-stop='1']")?.addEventListener("click", () => {
+    runtimeState.stopRequested = true;
+    runtimeState.message = "Stopping…";
+    renderPanel();
   });
 
   ui.root.querySelector("[data-preview='1']")?.addEventListener("click", async () => {
