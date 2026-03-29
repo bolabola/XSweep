@@ -320,6 +320,10 @@ async function followUser(screenName) {
   await apiPost("/1.1/friendships/create.json", { screen_name: screenName });
 }
 
+async function blockUser(screenName) {
+  await apiPost("/1.1/blocks/create.json", { screen_name: screenName });
+}
+
 function isOwnProfilePage() {
   const viewedHandle = extractHandleFromPath();
   runtimeState.currentHandle = viewedHandle;
@@ -372,6 +376,13 @@ function ensureStyles() {
     .xur-user-unfollowed{opacity:.55}
     .xur-btn-close{color:#a8b0d4;background:rgba(80,85,130,.3);border:1px solid rgba(120,128,190,.2);border-radius:8px;padding:5px 12px;font-size:11px;font-weight:600}
     .xur-btn-close:hover{color:#fff;background:rgba(80,85,130,.5)}
+
+    .xsw-block-btn{display:none;align-items:center;justify-content:center;width:18px;height:18px;border:none;border-radius:50%;background:transparent;color:#71767b;cursor:pointer;padding:0;margin-left:2px;flex-shrink:0;transition:all .15s;vertical-align:middle}
+    .xsw-block-btn svg{width:14px;height:14px;fill:currentColor;pointer-events:none}
+    .xsw-block-btn:hover{background:rgba(244,33,46,.12);color:#f4212e}
+    [data-testid="tweet"]:hover .xsw-block-btn,[data-testid="tweet"] .xsw-block-btn:focus{display:inline-flex}
+    .xsw-blocked-toast{position:fixed;bottom:40px;left:50%;transform:translateX(-50%);background:#1d9bf0;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;font-family:'Inter',system-ui,sans-serif;z-index:2147483647;box-shadow:0 4px 16px rgba(29,155,240,.4);opacity:0;transition:opacity .25s}
+    .xsw-blocked-toast.xsw-show{opacity:1}
 
     #xcleaner-root{
       position:fixed;top:60px;right:20px;z-index:2147483647;
@@ -962,6 +973,89 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   return false;
 });
+
+// ─── Timeline Block ──────────────────────────────────
+
+function showBlockedToast(screenName) {
+  let toast = document.querySelector(".xsw-blocked-toast");
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.className = "xsw-blocked-toast";
+    document.body.appendChild(toast);
+  }
+  toast.textContent = `Blocked @${screenName}`;
+  toast.classList.remove("xsw-show");
+  requestAnimationFrame(() => toast.classList.add("xsw-show"));
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => toast.classList.remove("xsw-show"), 2000);
+}
+
+function injectBlockButtons() {
+  ensureStyles();
+  const tweets = document.querySelectorAll('[data-testid="tweet"]');
+  for (const tweet of tweets) {
+    if (tweet.querySelector(".xsw-block-btn")) continue;
+
+    const userNameEl = tweet.querySelector('[data-testid="User-Name"]');
+    if (!userNameEl) continue;
+
+    const handleLink = userNameEl.querySelector('a[href^="/"][role="link"]');
+    if (!handleLink) continue;
+    const href = handleLink.getAttribute("href") || "";
+    const match = href.match(/^\/([A-Za-z0-9_]{1,15})$/);
+    if (!match) continue;
+    const screenName = match[1];
+
+    if (runtimeState.myHandle && screenName.toLowerCase() === runtimeState.myHandle) continue;
+
+    const btn = document.createElement("button");
+    btn.className = "xsw-block-btn";
+    btn.title = `Block @${screenName}`;
+    btn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M12 3.75c-4.56 0-8.25 3.69-8.25 8.25s3.69 8.25 8.25 8.25 8.25-3.69 8.25-8.25S16.56 3.75 12 3.75zM2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm4.396-5.304a.75.75 0 011.06 0l10.598 10.598a.75.75 0 01-1.06 1.06L6.646 7.756a.75.75 0 010-1.06z"/></svg>`;
+    btn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      btn.disabled = true;
+      btn.style.opacity = "0.4";
+      try {
+        await blockUser(screenName);
+        const article = btn.closest('[data-testid="tweet"]');
+        if (article) {
+          article.style.transition = "opacity .3s, max-height .3s";
+          article.style.opacity = "0";
+          article.style.maxHeight = article.offsetHeight + "px";
+          article.style.overflow = "hidden";
+          setTimeout(() => { article.style.maxHeight = "0"; article.style.padding = "0"; article.style.margin = "0"; }, 300);
+          setTimeout(() => article.remove(), 600);
+        }
+        showBlockedToast(screenName);
+      } catch (error) {
+        btn.disabled = false;
+        btn.style.opacity = "";
+        console.warn("[XSweep] Block failed:", error);
+      }
+    });
+
+    const lastLink = [...userNameEl.querySelectorAll('a[role="link"]')].pop();
+    if (lastLink) {
+      lastLink.parentElement.insertBefore(btn, lastLink.nextSibling);
+    }
+  }
+}
+
+const timelineObserver = new MutationObserver(() => injectBlockButtons());
+function startTimelineObserver() {
+  if (document.body) {
+    timelineObserver.observe(document.body, { childList: true, subtree: true });
+  } else {
+    document.addEventListener("DOMContentLoaded", () => {
+      timelineObserver.observe(document.body, { childList: true, subtree: true });
+    });
+  }
+}
+startTimelineObserver();
+
+// ─── Init ────────────────────────────────────────────
 
 loadMyHandle().catch(() => { });
 requestAuthHeaders().catch(() => false);
