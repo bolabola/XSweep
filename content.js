@@ -486,7 +486,7 @@ function renderUserRows(users) {
       : `<button class="xur-btn xur-btn-soft" data-single="${escapeHtml(user.screen_name)}" style="font-size:10px;padding:4px 8px">Unfollow</button>`;
     return `
     <div class="xur-user${isUnfollowed ? " xur-user-unfollowed" : ""}">
-      <img class="xur-avatar" src="${escapeHtml(user.profile_image_url_https)}" />
+      <a href="https://x.com/${escapeHtml(user.screen_name)}" target="_blank" rel="noopener"><img class="xur-avatar" src="${escapeHtml(user.profile_image_url_https)}" /></a>
       <div>
         <div class="xur-name">${escapeHtml(user.name)}</div>
         <div class="xur-handle">@${escapeHtml(user.screen_name)}</div>
