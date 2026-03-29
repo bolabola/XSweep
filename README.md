@@ -14,7 +14,8 @@ XSweep is a smart, powerful, and privacy-first X (Twitter) management extension 
 
 ### Timeline Block
 - **One-Click Block:** A hidden block button appears next to each tweet author's name when you hover over a tweet. Click it to instantly block the user.
-- **Undo Block:** A 5-second toast with an **Undo** button appears after blocking, letting you instantly reverse a misclick.
+- **Undo Block:** A 5-second toast with an **Undo** button appears after blocking, letting you instantly reverse a misclick. The tweet is restored in place.
+- **Stacking Toasts:** Block multiple users in quick succession — each toast stacks up from the bottom, each with its own Undo button and independent timer.
 - **Smooth Removal:** Blocked tweets fade out from your timeline with a confirmation toast.
 - **Non-intrusive:** The block button stays invisible until you hover, keeping your timeline clean.
 
@@ -45,7 +46,8 @@ XSweep is a smart, powerful, and privacy-first X (Twitter) management extension 
 1. Browse your timeline as usual.
 2. Hover over any tweet to reveal the block button (🚫) next to the author's name.
 3. Click the button to instantly block the user and remove their tweet from view.
-4. If it was an accident, click **Undo** on the toast notification within 5 seconds to unblock.
+4. If it was an accident, click **Undo** on the toast notification within 5 seconds to unblock and restore the tweet.
+5. Block multiple users rapidly — toasts stack up, each with its own independent Undo.
 
 ## Store Publication Requirements
 

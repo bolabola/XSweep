@@ -385,7 +385,8 @@ function ensureStyles() {
     .xsw-block-btn svg{width:14px;height:14px;fill:currentColor;pointer-events:none}
     .xsw-block-btn:hover{background:rgba(244,33,46,.12);color:#f4212e}
     [data-testid="tweet"]:hover .xsw-block-btn,[data-testid="tweet"] .xsw-block-btn:focus{display:inline-flex}
-    .xsw-blocked-toast{position:fixed;bottom:40px;left:50%;transform:translateX(-50%);background:#1d9bf0;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;font-family:'Inter',system-ui,sans-serif;z-index:2147483647;box-shadow:0 4px 16px rgba(29,155,240,.4);opacity:0;transition:opacity .25s;display:flex;align-items:center;gap:12px}
+    .xsw-toast-stack{position:fixed;bottom:40px;left:50%;transform:translateX(-50%);z-index:2147483647;display:flex;flex-direction:column-reverse;gap:8px;pointer-events:none}
+    .xsw-blocked-toast{background:#1d9bf0;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;font-family:'Inter',system-ui,sans-serif;box-shadow:0 4px 16px rgba(29,155,240,.4);opacity:0;transition:opacity .25s,margin-top .3s;display:flex;align-items:center;gap:12px;pointer-events:auto;white-space:nowrap}
     .xsw-blocked-toast.xsw-show{opacity:1}
     .xsw-undo-btn{background:rgba(255,255,255,.25);color:#fff;border:none;border-radius:5px;padding:3px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:background .15s}
     .xsw-undo-btn:hover{background:rgba(255,255,255,.45)}
@@ -982,14 +983,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 // ─── Timeline Block ──────────────────────────────────
 
-function showBlockedToast(screenName) {
-  let toast = document.querySelector(".xsw-blocked-toast");
-  if (!toast) {
-    toast = document.createElement("div");
-    toast.className = "xsw-blocked-toast";
-    document.body.appendChild(toast);
+function getToastStack() {
+  let stack = document.querySelector(".xsw-toast-stack");
+  if (!stack) {
+    stack = document.createElement("div");
+    stack.className = "xsw-toast-stack";
+    document.body.appendChild(stack);
   }
-  toast.innerHTML = "";
+  return stack;
+}
+
+function dismissToast(toast, tweetEl) {
+  toast.classList.remove("xsw-show");
+  if (tweetEl) setTimeout(() => tweetEl.remove(), 300);
+  setTimeout(() => toast.remove(), 300);
+}
+
+function showBlockedToast(screenName, tweetEl) {
+  const stack = getToastStack();
+  const toast = document.createElement("div");
+  toast.className = "xsw-blocked-toast";
+  stack.appendChild(toast);
+
   const label = document.createElement("span");
   label.textContent = `Blocked @${screenName}`;
   toast.appendChild(label);
@@ -1002,10 +1017,25 @@ function showBlockedToast(screenName) {
     undoBtn.textContent = "...";
     try {
       await unblockUser(screenName);
+      if (tweetEl && tweetEl._xswOrigStyle) {
+        const s = tweetEl._xswOrigStyle;
+        Object.assign(tweetEl.style, { transition: "opacity .3s, max-height .5s", opacity: "0", maxHeight: "0" });
+        requestAnimationFrame(() => {
+          tweetEl.style.opacity = s.opacity || "";
+          tweetEl.style.maxHeight = "";
+          tweetEl.style.overflow = s.overflow || "";
+          tweetEl.style.padding = s.padding || "";
+          tweetEl.style.margin = s.margin || "";
+          setTimeout(() => { tweetEl.style.transition = s.transition || ""; }, 500);
+        });
+        delete tweetEl._xswOrigStyle;
+        const blockBtn = tweetEl.querySelector(".xsw-block-btn");
+        if (blockBtn) { blockBtn.disabled = false; blockBtn.style.opacity = ""; }
+      }
       label.textContent = `Unblocked @${screenName}`;
       undoBtn.remove();
       clearTimeout(toast._timer);
-      toast._timer = setTimeout(() => toast.classList.remove("xsw-show"), 1500);
+      toast._timer = setTimeout(() => { toast.classList.remove("xsw-show"); setTimeout(() => toast.remove(), 300); }, 1500);
     } catch {
       undoBtn.disabled = false;
       undoBtn.textContent = "Undo";
@@ -1013,10 +1043,8 @@ function showBlockedToast(screenName) {
   });
   toast.appendChild(undoBtn);
 
-  toast.classList.remove("xsw-show");
   requestAnimationFrame(() => toast.classList.add("xsw-show"));
-  clearTimeout(toast._timer);
-  toast._timer = setTimeout(() => toast.classList.remove("xsw-show"), 5000);
+  toast._timer = setTimeout(() => dismissToast(toast, tweetEl), 5000);
 }
 
 function injectBlockButtons() {
@@ -1050,14 +1078,14 @@ function injectBlockButtons() {
         await blockUser(screenName);
         const article = btn.closest('[data-testid="tweet"]');
         if (article) {
+          article._xswOrigStyle = { transition: article.style.transition, opacity: article.style.opacity, maxHeight: article.style.maxHeight, overflow: article.style.overflow, padding: article.style.padding, margin: article.style.margin };
           article.style.transition = "opacity .3s, max-height .3s";
           article.style.opacity = "0";
           article.style.maxHeight = article.offsetHeight + "px";
           article.style.overflow = "hidden";
           setTimeout(() => { article.style.maxHeight = "0"; article.style.padding = "0"; article.style.margin = "0"; }, 300);
-          setTimeout(() => article.remove(), 600);
         }
-        showBlockedToast(screenName);
+        showBlockedToast(screenName, article);
       } catch (error) {
         btn.disabled = false;
         btn.style.opacity = "";
