@@ -57,5 +57,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
   }
 
+  if (message?.type === "OPEN_TAB" && message.url) {
+    chrome.tabs.create({ url: message.url, active: false });
+    return false;
+  }
+
   return false;
 });
