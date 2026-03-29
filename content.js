@@ -31,6 +31,7 @@ const runtimeState = {
   previewOpen: false,
   unfollowUsers: [],
   filteredUsers: [],
+  unfollowedSet: new Set(),
   nextCursor: -1
 };
 
@@ -315,6 +316,10 @@ async function unfollowUser(screenName) {
   await apiPost("/1.1/friendships/destroy.json", { screen_name: screenName });
 }
 
+async function followUser(screenName) {
+  await apiPost("/1.1/friendships/create.json", { screen_name: screenName });
+}
+
 function isOwnProfilePage() {
   const viewedHandle = extractHandleFromPath();
   runtimeState.currentHandle = viewedHandle;
@@ -362,6 +367,9 @@ function ensureStyles() {
     .xur-btn-danger:hover{box-shadow:0 6px 20px rgba(232,67,147,.45)}
     .xur-btn-stop{color:#fff;background:linear-gradient(135deg,#f39c12,#e67e22);box-shadow:0 4px 14px rgba(243,156,18,.3);font-weight:700;font-size:13px;padding:10px 20px;border-radius:10px}
     .xur-btn-stop:hover{box-shadow:0 6px 20px rgba(243,156,18,.45)}
+    .xur-btn-follow{color:#fff;background:linear-gradient(135deg,#00b894,#00cec9);border:none;border-radius:6px;cursor:pointer;font-weight:600;font-family:'Inter',system-ui,sans-serif;transition:all .2s}
+    .xur-btn-follow:hover{box-shadow:0 2px 10px rgba(0,184,148,.4)}
+    .xur-user-unfollowed{opacity:.55}
     .xur-btn-close{color:#a8b0d4;background:rgba(80,85,130,.3);border:1px solid rgba(120,128,190,.2);border-radius:8px;padding:5px 12px;font-size:11px;font-weight:600}
     .xur-btn-close:hover{color:#fff;background:rgba(80,85,130,.5)}
 
@@ -471,8 +479,13 @@ function closePanel() {
 }
 
 function renderUserRows(users) {
-  return users.map((user) => `
-    <div class="xur-user">
+  return users.map((user) => {
+    const isUnfollowed = runtimeState.unfollowedSet.has(user.screen_name);
+    const actionBtn = isUnfollowed
+      ? `<button class="xur-btn xur-btn-follow" data-refollow="${escapeHtml(user.screen_name)}" style="font-size:10px;padding:4px 8px">Follow</button>`
+      : `<button class="xur-btn xur-btn-soft" data-single="${escapeHtml(user.screen_name)}" style="font-size:10px;padding:4px 8px">Unfollow</button>`;
+    return `
+    <div class="xur-user${isUnfollowed ? " xur-user-unfollowed" : ""}">
       <img class="xur-avatar" src="${escapeHtml(user.profile_image_url_https)}" />
       <div>
         <div class="xur-name">${escapeHtml(user.name)}</div>
@@ -484,9 +497,9 @@ function renderUserRows(users) {
           <span class="xur-chip">${escapeHtml(formatDays(user.daysInactive))}</span>
         </div>
       </div>
-      <button class="xur-btn xur-btn-soft" data-single="${escapeHtml(user.screen_name)}" style="font-size:10px;padding:4px 8px">Unfollow</button>
-    </div>
-  `).join("");
+      ${actionBtn}
+    </div>`;
+  }).join("");
 }
 
 async function renderPanel() {
@@ -497,6 +510,8 @@ async function renderPanel() {
     ui.root.id = "xcleaner-root";
     document.body.appendChild(ui.root);
   }
+
+  const prevScroll = ui.root?.querySelector(".xur-preview-wrap")?.scrollTop ?? 0;
 
   const settings = await getStorage(UNFOLLOW_KEY, UNFOLLOW_DEFAULTS);
   const followerLimit = Number(settings.followerLimit ?? 5000);
@@ -641,6 +656,9 @@ async function renderPanel() {
     </div>
   `;
 
+  const previewWrap = ui.root.querySelector(".xur-preview-wrap");
+  if (previewWrap && prevScroll) previewWrap.scrollTop = prevScroll;
+
   // Wire up event handlers
   ui.root.querySelector("[data-close='1']")?.addEventListener("click", closePanel);
 
@@ -745,6 +763,14 @@ async function renderPanel() {
     });
   });
 
+  ui.root.querySelectorAll("[data-refollow]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const screenName = button.getAttribute("data-refollow");
+      if (!screenName) return;
+      await runSingleFollow(screenName);
+    });
+  });
+
   return { ok: true, candidates: users.length };
 }
 
@@ -797,8 +823,24 @@ async function runSingleAction(screenName) {
   try {
     await unfollowUser(screenName);
     runtimeState.count += 1;
+    runtimeState.unfollowedSet.add(screenName);
     runtimeState.message = `Unfollowed @${screenName}.`;
-    runtimeState.unfollowUsers = runtimeState.unfollowUsers.filter((user) => user.screen_name !== screenName);
+    await applyFiltersAndRender();
+  } catch (error) {
+    runtimeState.message = String(error?.message || error);
+    await renderPanel();
+  }
+}
+
+async function runSingleFollow(screenName) {
+  if (!screenName) return;
+  runtimeState.message = `Following @${screenName}...`;
+  await renderPanel();
+
+  try {
+    await followUser(screenName);
+    runtimeState.unfollowedSet.delete(screenName);
+    runtimeState.message = `Followed @${screenName}.`;
     await applyFiltersAndRender();
   } catch (error) {
     runtimeState.message = String(error?.message || error);
@@ -812,20 +854,21 @@ async function runBatch() {
   runtimeState.running = true;
   runtimeState.stopRequested = false;
   runtimeState.count = 0;
-  runtimeState.target = runtimeState.filteredUsers.length;
+  runtimeState.target = runtimeState.filteredUsers.filter((u) => !runtimeState.unfollowedSet.has(u.screen_name)).length;
 
   const settings = await getStorage(UNFOLLOW_KEY, UNFOLLOW_DEFAULTS);
   const speed = settings.unfollowAllSpeed;
 
   for (const user of [...runtimeState.filteredUsers]) {
     if (runtimeState.stopRequested) break;
+    if (runtimeState.unfollowedSet.has(user.screen_name)) continue;
 
     runtimeState.message = `Unfollowing @${user.screen_name} (${runtimeState.count + 1}/${runtimeState.target})`;
     await renderPanel();
 
     try {
       await unfollowUser(user.screen_name);
-      runtimeState.unfollowUsers = runtimeState.unfollowUsers.filter((item) => item.screen_name !== user.screen_name);
+      runtimeState.unfollowedSet.add(user.screen_name);
       runtimeState.count += 1;
     } catch (error) {
       runtimeState.message = `Stopped on @${user.screen_name}: ${String(error?.message || error)}`;
