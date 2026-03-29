@@ -355,7 +355,7 @@ function ensureStyles() {
   style.textContent = `
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
-    #xcleaner-anchor{margin-top:10px;display:flex;gap:8px}
+    #xcleaner-anchor{display:inline-flex;align-items:center;margin-left:12px}
 
     .xur-btn{border:none;border-radius:9px;padding:7px 14px;font-weight:600;font-size:12px;line-height:1.15;cursor:pointer;white-space:nowrap;transition:all .2s ease;font-family:'Inter',system-ui,sans-serif}
     .xur-btn:hover{filter:brightness(1.1);transform:translateY(-1px)}
@@ -888,15 +888,25 @@ async function runBatch() {
 // ─── Bootstrap ───────────────────────────────────────
 
 function ensureAnchor() {
-  const host = document.querySelector("[data-testid='UserName']")?.parentElement;
-  if (!host || !isOwnProfilePage()) {
+  ensureStyles();
+  if (!isOwnProfilePage()) {
+    ui.anchor?.remove();
+    ui.anchor = null;
+    return;
+  }
+
+  const handle = runtimeState.myHandle || runtimeState.currentHandle;
+  const followingLink = handle && document.querySelector(`a[href="/${handle}/following"]`);
+  const host = followingLink?.parentElement?.parentElement;
+
+  if (!host) {
     ui.anchor?.remove();
     ui.anchor = null;
     return;
   }
 
   if (!ui.anchor) {
-    ui.anchor = document.createElement("div");
+    ui.anchor = document.createElement("span");
     ui.anchor.id = "xcleaner-anchor";
     host.appendChild(ui.anchor);
   } else if (ui.anchor.parentElement !== host) {
