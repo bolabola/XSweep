@@ -324,6 +324,10 @@ async function blockUser(screenName) {
   await apiPost("/1.1/blocks/create.json", { screen_name: screenName });
 }
 
+async function unblockUser(screenName) {
+  await apiPost("/1.1/blocks/destroy.json", { screen_name: screenName });
+}
+
 function isOwnProfilePage() {
   const viewedHandle = extractHandleFromPath();
   runtimeState.currentHandle = viewedHandle;
@@ -381,8 +385,10 @@ function ensureStyles() {
     .xsw-block-btn svg{width:14px;height:14px;fill:currentColor;pointer-events:none}
     .xsw-block-btn:hover{background:rgba(244,33,46,.12);color:#f4212e}
     [data-testid="tweet"]:hover .xsw-block-btn,[data-testid="tweet"] .xsw-block-btn:focus{display:inline-flex}
-    .xsw-blocked-toast{position:fixed;bottom:40px;left:50%;transform:translateX(-50%);background:#1d9bf0;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;font-family:'Inter',system-ui,sans-serif;z-index:2147483647;box-shadow:0 4px 16px rgba(29,155,240,.4);opacity:0;transition:opacity .25s}
+    .xsw-blocked-toast{position:fixed;bottom:40px;left:50%;transform:translateX(-50%);background:#1d9bf0;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;font-family:'Inter',system-ui,sans-serif;z-index:2147483647;box-shadow:0 4px 16px rgba(29,155,240,.4);opacity:0;transition:opacity .25s;display:flex;align-items:center;gap:12px}
     .xsw-blocked-toast.xsw-show{opacity:1}
+    .xsw-undo-btn{background:rgba(255,255,255,.25);color:#fff;border:none;border-radius:5px;padding:3px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:background .15s}
+    .xsw-undo-btn:hover{background:rgba(255,255,255,.45)}
 
     #xcleaner-root{
       position:fixed;top:60px;right:20px;z-index:2147483647;
@@ -983,11 +989,34 @@ function showBlockedToast(screenName) {
     toast.className = "xsw-blocked-toast";
     document.body.appendChild(toast);
   }
-  toast.textContent = `Blocked @${screenName}`;
+  toast.innerHTML = "";
+  const label = document.createElement("span");
+  label.textContent = `Blocked @${screenName}`;
+  toast.appendChild(label);
+
+  const undoBtn = document.createElement("button");
+  undoBtn.className = "xsw-undo-btn";
+  undoBtn.textContent = "Undo";
+  undoBtn.addEventListener("click", async () => {
+    undoBtn.disabled = true;
+    undoBtn.textContent = "...";
+    try {
+      await unblockUser(screenName);
+      label.textContent = `Unblocked @${screenName}`;
+      undoBtn.remove();
+      clearTimeout(toast._timer);
+      toast._timer = setTimeout(() => toast.classList.remove("xsw-show"), 1500);
+    } catch {
+      undoBtn.disabled = false;
+      undoBtn.textContent = "Undo";
+    }
+  });
+  toast.appendChild(undoBtn);
+
   toast.classList.remove("xsw-show");
   requestAnimationFrame(() => toast.classList.add("xsw-show"));
   clearTimeout(toast._timer);
-  toast._timer = setTimeout(() => toast.classList.remove("xsw-show"), 2000);
+  toast._timer = setTimeout(() => toast.classList.remove("xsw-show"), 5000);
 }
 
 function injectBlockButtons() {
