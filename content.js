@@ -1,5 +1,5 @@
 const MY_ACCOUNT_KEY = "my_x_account";
-console.info("[XSweep] content.js 1.0.0 loaded");
+console.info("[XSweep] content.js 1.1.0 loaded");
 const UNFOLLOW_KEY = "x_unfollow_settings_v4";
 
 const UNFOLLOW_DEFAULTS = {
@@ -1052,6 +1052,7 @@ function injectBlockButtons() {
   const tweets = document.querySelectorAll('[data-testid="tweet"]');
   for (const tweet of tweets) {
     if (tweet.querySelector(".xsw-block-btn")) continue;
+    if (tweet.closest('[data-testid="placementTracking"]')) continue;
 
     const userNameEl = tweet.querySelector('[data-testid="User-Name"]');
     if (!userNameEl) continue;
